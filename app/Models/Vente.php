@@ -22,5 +22,12 @@ public function feedback()
 {
     return $this->hasOne(Feedback::class);
 }
+public function produits()
+{
+    return $this->belongsToMany(Produit::class, 'produit_ventes') // ici on précise le nom de la table pivot
+        ->withPivot(['quantite', 'prix_unitaire', 'montant_total', 'date_vente'])
+        ->withTimestamps();
+}
+
 
 }

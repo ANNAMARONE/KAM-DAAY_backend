@@ -21,7 +21,7 @@ class AuthController extends Controller
             'role' => 'required|in:admin,vendeuse',
             'localite' => 'required|string|max:255',
             'statut' => 'required|in:actif,inactif',
-            'domaine_activite' => 'required|string|max:255',
+            'domaine_activite' => 'required|string|in:halieutique,Agroalimentaire,Artisanat local,Savons / Cosmétiques,Jus locaux|max:255',
         ]);
        $filname=null;
        if($request->hasFile('profile')) {
@@ -137,7 +137,7 @@ class AuthController extends Controller
                 'telephone' => 'required|regex:/^([0-9\s\-\+\(\)]*)$/|min:9',
                 'localite' => 'required|string|max:255',
                 'statut' => 'required|in:actif,inactif',
-                'domaine_activite' => 'required|string|max:255',
+                'domaine_activite' => 'required|string|in:halieutique,Agroalimentaire,Artisanat local,Savons / Cosmétiques,Jus locaux|max:255',
             ]);
             if($request->hasFile('profile')) {
                 $file = $request->file('profile');
