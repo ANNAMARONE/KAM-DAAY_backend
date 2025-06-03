@@ -9,6 +9,8 @@ use App\Models\Produit;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Http\Request;
+use Barryvdh\DomPDF\Facade\Pdf; 
+
 
 class ClientController extends Controller
 {
@@ -123,7 +125,6 @@ class ClientController extends Controller
             ], 500);
         }
     }
-    
 
     /**
      * Display the specified resource.
@@ -170,19 +171,11 @@ class ClientController extends Controller
     //Supprimer un client sans le suprrimer de la base de données
     public function softDelete(Client $client)
     {
-        // Vérifier si le client existe
-        if (!$client) {
-            return response()->json(['error' => 'Client not found'], 404);
-        }
-
-        // Marquer le client comme supprimé
-        $client->delete();
-
+        $client->delete(); 
+    
         return response()->json(['message' => 'Client deleted successfully'], 200);
     }
-
-
-
+    
     //supprimer un client et ses ventes de la base de données
     public function forceDelete(Client $client)
     {
@@ -198,15 +191,147 @@ class ClientController extends Controller
         return response()->json(['message' => 'Client and associated sales deleted successfully'], 200);
     }
   //restaurer un client supprimé
-    public function restore($id)
+  public function restore($id)
+  {
+      $client = Client::withTrashed()->find($id);
+  
+      if (!$client) {
+          return response()->json(['error' => 'Client not found'], 404);
+      }
+  
+      $client->restore();
+  
+      return response()->json(['message' => 'Client restored successfully', 'client' => $client], 200);
+  }
+  //rechercher un client par son nom
+  public function search(Request $request)
+  {
+      $searchTerm = $request->input('query');
+  
+      if (!$searchTerm) {
+          return response()->json(['error' => 'Search query is required'], 400);
+      }
+  
+      $clients = Client::where('nom', 'LIKE', '%' . $searchTerm . '%')
+          ->orWhere('prenom', 'LIKE', '%' . $searchTerm . '%')
+          ->get();
+  
+      return response()->json($clients);
+  }
+  //filtrer les client par date de vente
+    public function filterByDate(Request $request)
     {
-        $client = Client::withTrashed()->find($id);
-        if (!$client) {
-            return response()->json(['error' => 'Client not found'], 404);
+        $startDate = $request->input('start_date');
+        $endDate = $request->input('end_date');
+    
+        if (!$startDate || !$endDate) {
+            return response()->json(['error' => 'Start date and end date are required'], 400);
         }
-
-        $client->restore();
-
-        return response()->json(['message' => 'Client restored successfully', 'client' => $client], 200);
+    
+        $clients = Client::whereHas('ventes', function ($query) use ($startDate, $endDate) {
+            $query->whereBetween('created_at', [$startDate, $endDate]);
+        })->get();
+    
+        return response()->json($clients);
     }
+    
+//exporter les clients au format CSV ou pdf
+
+public function exportClients(Request $request)
+{
+    $format = $request->input('format', 'csv'); // Par défaut, CSV
+
+    $clients = Client::all();
+
+    if ($format === 'csv') {
+        $filename = 'clients.csv';
+
+        return response()->stream(function () use ($clients) {
+            $handle = fopen('php://output', 'w');
+
+            // En-têtes CSV
+            fputcsv($handle, ['ID', 'Nom', 'Prénom', 'Téléphone', 'Adresse', 'Statut', 'Type', 'Date de création']);
+
+            foreach ($clients as $client) {
+                fputcsv($handle, [
+                    $client->id,
+                    $client->nom,
+                    $client->prenom,
+                    $client->telephone,
+                    $client->adresse,
+                    $client->statut,
+                    $client->type,
+                    $client->created_at,
+                ]);
+            }
+
+            fclose($handle);
+        }, 200, [
+            'Content-Type' => 'text/csv',
+            'Content-Disposition' => "attachment; filename=\"$filename\"",
+        ]);
+    }
+
+    elseif ($format === 'pdf') {
+        $pdf = Pdf::loadView('clients.export', ['clients' => $clients]);
+        return $pdf->download('clients.pdf');
+    }
+
+    else {
+        return response()->json(['error' => 'Format non supporté'], 400);
+    }
+}
+
+
+// exporter les client d'un utilisateur connecté au format CSV ou PDF
+public function exportMesClients(Request $request)
+{
+    $format = $request->input('format', 'csv'); 
+
+    $user = Auth::user();
+    if (!$user) {
+        return response()->json(['error' => 'Unauthorized'], 401);
+    }
+
+    $clients = Client::where('user_id', $user->id)->get();
+
+    if ($format === 'csv') {
+        $filename = 'mes_clients.csv';
+
+        return response()->stream(function () use ($clients) {
+            $handle = fopen('php://output', 'w');
+
+            fputcsv($handle, ['ID', 'Nom', 'Prénom', 'Téléphone', 'Adresse', 'Statut', 'Type', 'Date de création']);
+
+            foreach ($clients as $client) {
+                fputcsv($handle, [
+                    $client->id,
+                    $client->nom,
+                    $client->prenom,
+                    $client->telephone,
+                    $client->adresse,
+                    $client->statut,
+                    $client->type,
+                    $client->created_at
+                ]);
+            }
+
+            fclose($handle);
+        }, 200, [
+            'Content-Type' => 'text/csv',
+            'Content-Disposition' => "attachment; filename=\"$filename\"",
+        ]);
+    }
+
+    elseif ($format === 'pdf') {
+        $pdf = Pdf::loadView('clients.export', ['clients' => $clients]);
+        return $pdf->download('mes_clients.pdf');
+    }
+
+    else {
+        return response()->json(['error' => 'Format non supporté'], 400);
+    }
+}
+
+
 }
