@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\StoreVenteRequest;
 use App\Http\Requests\UpdateVenteRequest;
+use App\Models\Client;
 use App\Models\Produit;
 use App\Models\Vente;
 use Illuminate\Http\Request;
@@ -101,7 +102,7 @@ public function mesVentes(){
 public function ventesNonSatisfaites(){
     
     $ventes=Vente::whereHas('feedback',function($query){
-        $query->where('satisfaite',0);
+        $query->where('satisfait',0);
     })->get();
     return response()->json([
         'status'=>'success',
@@ -232,4 +233,60 @@ public function ventesNonSatisfaites(){
             'message'=>'vente supprimée avec succès'
         ]);
     }
+
+    public function noterParLien($id)
+{
+    $client = Client::find($id);
+    if (!$client) {
+        return response()->json(['error' => 'Client not found'], 404);
+    }
+
+    $telephone = preg_replace('/\D/', '', $client->telephone); 
+
+   
+    $vente = $client->ventes()->latest()->first();
+
+    if (!$vente) {
+        return response()->json(['error' => 'Aucune vente trouvée pour ce client'], 404);
+    }
+
+    
+    $linkSatisfait = url("/reponse_vente/{$vente->id}/1");
+    $linkNonSatisfait = url("/reponse_vente/{$vente->id}/0");
+
+    // Message WhatsApp enrichi
+    $whatsappMessage = "Bonjour $client->nom, êtes-vous satisfait de votre commande ?\n\n"
+        . "Oui : $linkSatisfait\n"
+        . "Non : $linkNonSatisfait";
+
+    return response()->json([
+        'whatsapp_link' => "https://wa.me/221$telephone?text=" . urlencode($whatsappMessage),
+        'call_link' => "tel:+221$telephone",
+    ]);
+}
+
+    public function noterParLienVente($vente_id, $satisfaite)
+{
+    $vente = Vente::find($vente_id);
+
+    if (!$vente) {
+        return response('<h2>Vente non trouvée</h2>', 404)
+            ->header('Content-Type', 'text/html');
+    }
+
+    // Vérifier si un feedback existe déjà
+    $feedback = $vente->feedback;
+
+    if ($feedback) {
+        $feedback->update(['satisfait' => $satisfaite]);
+    } else {
+        $vente->feedback()->create([
+            'satisfaite' => $satisfaite,
+        ]);
+    }
+
+    return response('<h2>Merci pour votre réponse !</h2>', 200)
+        ->header('Content-Type', 'text/html');
+}
+
 }

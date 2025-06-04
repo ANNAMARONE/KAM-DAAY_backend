@@ -332,6 +332,65 @@ public function exportMesClients(Request $request)
         return response()->json(['error' => 'Format non supporté'], 400);
     }
 }
+// Générer des liens de contact pour WhatsApp 
+public function contactLinks($id)
+{
+    $client = Client::find($id);
+    if (!$client) {
+        return response()->json(['error' => 'Client not found'], 404);
+    }
+
+    $telephone = preg_replace('/\D/', '', $client->telephone); 
+    $whatsappMessage = "Bonjour $client->nom, je vous contacte concernant votre commande.";
+
+    return response()->json([
+        'whatsapp_link' => "https://wa.me/221$telephone?text=" . urlencode($whatsappMessage),
+        'call_link' => "tel:+221$telephone",
+    ]);
+}
+
+
+// Afficher les liens de contact pour tous les clients de l'utilisateur connecté
+public function contactClients()
+{
+    $user = Auth::user();
+    if (!$user) {
+        return response()->json(['error' => 'Unauthorized'], 401);
+    }
+    
+    $clients = Client::where('user_id', $user->id)->get();
+    $contactLinks = [];
+
+    foreach ($clients as $client) {
+        $vente = $client->ventes()->latest()->first();
+        $telephone = preg_replace('/\D/', '', $client->telephone);
+
+        if (!$vente) {
+            // Sauter les clients sans vente
+            continue;
+        }
+
+        $linkSatisfait = url("/reponse_vente/{$vente->id}/1");
+        $linkNonSatisfait = url("/reponse_vente/{$vente->id}/0");
+    
+        $whatsappMessage = "Bonjour $client->nom, êtes-vous satisfait de votre commande ?\n\n"
+            . "✅ Oui : $linkSatisfait\n"
+            . "❌ Non : $linkNonSatisfait";
+
+        $contactLinks[] = [
+            'client_id' => $client->id,
+            'client_nom' => $client->nom,
+            'whatsapp_link' => "https://wa.me/221$telephone?text=" . urlencode($whatsappMessage),
+            'call_link' => "tel:+221$telephone",
+        ];
+    }
+
+    return response()->json([
+        'status' => 'success',
+        'contacts' => $contactLinks
+    ]);
+}
+
 
 
 }

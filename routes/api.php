@@ -34,6 +34,9 @@ Route::middleware('auth:api')->group(function () {
     //route pour la gestion des ventes
     Route::get('/mes_ventes', [VenteController::class, 'mesVentes'])->name('ventes.mesVentes');
     Route::post('/ajouter_vente', [VenteController::class, 'store'])->name('ventes.store');
+    Route::get('/contact_client/{id}', [ClientController::class, 'contactLinks']);
+   Route::get('/contactMesClient', [ClientController::class, 'contactClients']);
+
 });
 Route::get('/ventes', [VenteController::class, 'index'])->name('ventes.index');
 Route::get('/ventes_par_client/{id}', [VenteController::class, 'ventesParClient'])->name('ventes.ventesParClient');
@@ -42,3 +45,5 @@ Route::post('/noter_vente/{id}/{satisfaite}', [VenteController::class, 'noterVen
 Route::get('/ventesNonSatisfaites', [VenteController::class, 'ventesNonSatisfaites'])->name('ventes.ventesNonSatisfaites');
 Route::delete('/supprimer_vente/{id}', [VenteController::class, 'destroy'])->name('ventes.destroy');
 Route::get('/detail_vente/{id}', [VenteController::class, 'show'])->name('ventes.show');
+Route::get('/reponse_client/{id}/{satisfaite}', [VenteController::class, 'noterParLien']);
+Route::get('/reponse_vente/{vente_id}/{satisfaite}', [VenteController::class, 'noterParLienVente']);
