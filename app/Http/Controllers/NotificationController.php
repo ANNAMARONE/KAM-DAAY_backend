@@ -5,15 +5,21 @@ namespace App\Http\Controllers;
 use App\Http\Requests\StoreNotificationRequest;
 use App\Http\Requests\UpdateNotificationRequest;
 use App\Models\Notification;
+use Illuminate\Support\Facades\Request;
 
 class NotificationController extends Controller
 {
     /**
      * Display a listing of the resource.
      */
-    public function index()
+    public function index(Request $request)
     {
-        //
+        $user = $request->user(); 
+
+        return response()->json([
+            'status' => 'success',
+            'notifications' => $user->notifications, 
+        ]);
     }
 
     /**

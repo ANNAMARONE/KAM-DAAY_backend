@@ -390,7 +390,49 @@ public function contactClients()
         'contacts' => $contactLinks
     ]);
 }
+//Clients les plus fidèles
+public function clientsFideles()
+{
+    $clients = Client::withCount('ventes')
+        ->orderBy('ventes_count', 'desc')
+        ->take(10)
+        ->get();
 
+    return response()->json($clients);
+}
+//Taux de satisfaction: Pourcentage de feedbacks positifs par rapport au total.
+public function tauxSatisfaction()
+{
+    $ventes = DB::table('ventes')
+        ->select(DB::raw('SUM(CASE WHEN reponse = 1 THEN 1 ELSE 0 END) as positif_count, COUNT(*) as total_count'))
+        ->first();
 
+    if ($ventes->total_count == 0) {
+        return response()->json(['taux_satisfaction' => 0]);
+    }
+
+    $tauxSatisfaction = ($ventes->positif_count / $ventes->total_count) * 100;
+
+    return response()->json(['taux_satisfaction' => $tauxSatisfaction]);
+}
+//Alertes et indicateurs critiques: Liste des clients inactifs, clients insatisfaits récurrents
+public function clientsInsatisfaitsRecurrents()
+{
+    $clients = Client::whereHas('ventes.feedback', function ($query) {
+        $query->where('satisfaite', 0); // feedback négatif
+    })
+    ->withCount(['ventes as feedback_negatif_count' => function ($query) {
+        $query->whereHas('feedback', function ($subQuery) {
+            $subQuery->where('satisfaite', 0);
+        });
+    }])
+    ->having('feedback_negatif_count', '>=', 2)
+    ->get();
+
+    return response()->json([
+        'status' => 'success',
+        'clients_insatisfaits_recurrents' => $clients
+    ]);
+}
 
 }

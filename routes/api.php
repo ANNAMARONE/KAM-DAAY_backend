@@ -1,20 +1,28 @@
 <?php
-
+use App\Http\Controllers\AIController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\ClientController;
+use App\Http\Controllers\GestionUtilisateur;
 use App\Http\Controllers\VenteController;
-use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Facades\Auth;
 
 Route::get ('/',function(){
 return response()->json(['message'=>'bonjour']);
 });
+Route::post('/ai/ask', [AIController::class, 'ask']);
 Route::post('/register', [AuthController::class, 'register'])->name('register');
 Route::post('/login', [AuthController::class, 'login']);
 Route::middleware('auth:api')->group(function () {
     Route::get('/logout', [AuthController::class, 'logout'])->name('logout');
     Route::get('/user', [AuthController::class, 'user'])->name('user');
     Route::post('/refresh', [AuthController::class, 'refresh'])->name('refresh');
+    Route::post('/mot-de-passe/oublie-par-telephone', [AuthController::class, 'demandeMotDePasseOublie']);
+    Route::post('/reset-password', action: [AuthController::class, 'resetPassword']);
+    Route::middleware('auth:api')->get('/notifications', function () {
+        return auth::user()->notifications()->latest()->take(10)->get();
+    });
+   
     //route pour la gestion clients
     Route::get('/clients', [ClientController::class, 'index'])->name('clients.index');
     Route::get('detail_client/{client}', [ClientController::class, 'show'])->name('clients.show');
@@ -36,7 +44,18 @@ Route::middleware('auth:api')->group(function () {
     Route::post('/ajouter_vente', [VenteController::class, 'store'])->name('ventes.store');
     Route::get('/contact_client/{id}', [ClientController::class, 'contactLinks']);
    Route::get('/contactMesClient', [ClientController::class, 'contactClients']);
-
+    //route pour la gestion des utilisateurs
+    Route::get('/utilisateurs', [GestionUtilisateur::class, 'index'])->name('utilisateurs.index');   
+    Route::post('/activer_utilisateur/{id}', [GestionUtilisateur::class, 'activerUtilisateur'])->name('utilisateurs.activer'); 
+    Route::post('/desactiver_utilisateur/{id}', [GestionUtilisateur::class, 'desactiverUtilisateur'])->name('utilisateurs.desactiver');
+    Route::delete('/supprimer_utilisateur/{id}', [GestionUtilisateur::class, 'supprimerUtilisateur'])->name('utilisateurs.destroy');
+    Route::get('/utilisateurs/search', [GestionUtilisateur::class, 'search'])->name('utilisateurs.search');
+    Route::get('/utilisateur_detail/{id}', [GestionUtilisateur::class, 'show'])->name('utilisateurs.show');
+    Route::get('/recherche_utilisateur', [GestionUtilisateur::class, 'rechercheUtilisateur'])->name('utilisateurs.recherche');
+    Route::get('/export_utilisateurs', [GestionUtilisateur::class, 'exportUtilisateurs'])->name('utilisateurs.exportUtilisateurs');
+    Route::get('/export_mes_utilisateurs', [GestionUtilisateur::class, 'exportMesUtilisateurs'])->name('utilisateurs.exportMesUtilisateurs');
+    Route::get('/export_mes_ventes', [VenteController::class, 'exportMesVentes'])->name('ventes.exportMesVentes');
+    Route::get('/verifier_utilisateur_actif/{id}', [GestionUtilisateur::class, 'isActif'])->name('utilisateurs.isActif');
 });
 Route::get('/ventes', [VenteController::class, 'index'])->name('ventes.index');
 Route::get('/ventes_par_client/{id}', [VenteController::class, 'ventesParClient'])->name('ventes.ventesParClient');
@@ -47,3 +66,4 @@ Route::delete('/supprimer_vente/{id}', [VenteController::class, 'destroy'])->nam
 Route::get('/detail_vente/{id}', [VenteController::class, 'show'])->name('ventes.show');
 Route::get('/reponse_client/{id}/{satisfaite}', [VenteController::class, 'noterParLien']);
 Route::get('/reponse_vente/{vente_id}/{satisfaite}', [VenteController::class, 'noterParLienVente']);
+Route::get('/alertes/clients_insatisfaits', [ClientController::class, 'clientsInsatisfaitsRecurrents']);
