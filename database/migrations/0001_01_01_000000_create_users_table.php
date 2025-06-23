@@ -20,7 +20,7 @@ return new class extends Migration
             $table->enum('role', ['admin', 'vendeuse'])->default('vendeuse');
             $table->string('localite'); 
             $table->enum('statut', ['actif', 'inactif'])->default('actif');
-            $table->enum('domaine_activite',['halieutique','Agroalimentaire','Artisanat local','Savons / Cosmétiques','Jus locaux'])->nullable(); // ex : poisson, jus, etc.
+            $table->enum('domaine_activite',['halieutique','Agroalimentaire','Artisanat local','Savons / Cosmétiques','Jus locaux'])->nullable(); 
             $table->rememberToken();
             $table->timestamps();
         });

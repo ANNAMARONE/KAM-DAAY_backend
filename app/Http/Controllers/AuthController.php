@@ -26,6 +26,7 @@ class AuthController extends Controller
                 'localite' => 'required|string|max:255',
                 'statut' => 'nullable|in:actif,inactif', 
                 'domaine_activite' => 'required|string|in:halieutique,Agroalimentaire,Artisanat local,Savons / Cosmétiques,Jus locaux',
+                'GIE' => 'nullable|string|max:255', // GIE est optionnel
             ]);
     
             // 📁 Gestion de l'image
@@ -34,6 +35,9 @@ class AuthController extends Controller
                 $file = $request->file('profile');
                 $filename = time() . '.' . $file->getClientOriginalExtension();
                 $file->move(public_path('images/profiles'), $filename);
+            }
+            if (!$filename) {
+                return response()->json(['error' => 'Profile image is required'], 422);
             }
     
             // 🧠 Valeurs par défaut
@@ -50,6 +54,7 @@ class AuthController extends Controller
                 'localite' => $validatedData['localite'],
                 'statut' => $statut,
                 'domaine_activite' => $validatedData['domaine_activite'],
+                'GIE' => $validatedData['GIE'] ?? null,
             ]);
     
            

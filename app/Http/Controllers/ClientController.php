@@ -7,10 +7,10 @@ use App\Http\Requests\UpdateClientRequest;
 use App\Models\Client;
 use App\Models\Produit;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Auth;
-use Illuminate\Http\Request;
-use Barryvdh\DomPDF\Facade\Pdf; 
 
+use Illuminate\Http\Request;
+use Barryvdh\DomPDF\Facade\Pdf;
+use Illuminate\Support\Facades\Auth;
 
 class ClientController extends Controller
 {

@@ -6,22 +6,19 @@ use App\Http\Controllers\GestionUtilisateur;
 use App\Http\Controllers\VenteController;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Auth;
-
-Route::get ('/',function(){
-return response()->json(['message'=>'bonjour']);
-});
 Route::post('/ai/ask', [AIController::class, 'ask']);
 Route::post('/register', [AuthController::class, 'register'])->name('register');
 Route::post('/login', [AuthController::class, 'login']);
-Route::middleware('auth:api')->group(function () {
+Route::middleware('auth:api')->get('/notifications', function () {
+    return auth::user()->notifications()->latest()->take(10)->get();
+});
+Route::middleware('jwt')->group(function () {
     Route::get('/logout', [AuthController::class, 'logout'])->name('logout');
     Route::get('/user', [AuthController::class, 'user'])->name('user');
     Route::post('/refresh', [AuthController::class, 'refresh'])->name('refresh');
     Route::post('/mot-de-passe/oublie-par-telephone', [AuthController::class, 'demandeMotDePasseOublie']);
     Route::post('/reset-password', action: [AuthController::class, 'resetPassword']);
-    Route::middleware('auth:api')->get('/notifications', function () {
-        return auth::user()->notifications()->latest()->take(10)->get();
-    });
+
    
     //route pour la gestion clients
     Route::get('/clients', [ClientController::class, 'index'])->name('clients.index');
