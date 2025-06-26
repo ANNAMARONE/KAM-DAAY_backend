@@ -11,6 +11,7 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Log;
 class AuthController extends Controller
 {
     public function register(Request $request)
@@ -185,68 +186,89 @@ class AuthController extends Controller
        public function demandeMotDePasseOublie(Request $request)
        {
            $telephone = $request->input('telephone');
+           Log::info("Demande mot de passe oublié reçue pour: $telephone");
        
            $utilisateur = User::where('telephone', $telephone)->first();
        
            if (!$utilisateur) {
+               Log::warning("Utilisateur non trouvé pour téléphone: $telephone");
                return response()->json([
                    'status' => 'error',
                    'message' => 'Utilisateur non trouvé'
                ], 404);
            }
        
-           // Générer le token
+           // Générer un token sécurisé
            $token = Str::random(60);
+           $hashedToken = hash('sha256', $token);
        
-           // Stocker dans la table personnalisée
+           // Enregistrer ou mettre à jour le token
            DB::table('password_resets')->updateOrInsert(
                ['telephone' => $telephone],
                [
-                   'token' => bcrypt($token),
+                   'token' => $hashedToken,
                    'created_at' => Carbon::now()
                ]
            );
        
-           // Générer le lien WhatsApp
-           $resetLink = "https://example.com/reset-password?token=" . $token . "&telephone=" . $telephone;
-           $message = "Bonjour " . $utilisateur->name . ", cliquez ici pour réinitialiser votre mot de passe : $resetLink";
+           // Lien de réinitialisation
+           $resetLink = "http://localhost:5173/reset-password?token=$token&telephone=$telephone";
+       
+           // Message WhatsApp
+           $nom = $utilisateur->name ?? 'cher utilisateur';
+           $message = "Bonjour {$utilisateur->name}, cliquez ici pour réinitialiser votre mot de passe : $resetLink";
+         
+           $wa_link = "https://wa.me/221$telephone?text=" . urlencode($message);
+       
+           Log::info("Lien WhatsApp généré : " . $wa_link);
        
            return response()->json([
                'status' => 'success',
-               'whatsapp_link' => "https://wa.me/221$telephone?text=" . urlencode($message)
+               'whatsapp_link' => $wa_link
            ]);
        }
+       
        public function resetPassword(Request $request)
        {
-           try{
-            $request->validate([
-                'token' => 'required',
-                'telephone' => 'required',
-                'password' => 'required|string|min:8|confirmed',
-            ]);
-        
-            // Rechercher dans la bonne table
-            $reset = DB::table('password_resets')->where('telephone', $request->telephone)->first();
-        
-            if (!$reset || !Hash::check($request->token, $reset->token)) {
-                return response()->json(['error' => 'Token ou téléphone invalide'], 400);
-            }
-        
-            $user = User::where('telephone', $request->telephone)->first();
-            if (!$user) {
-                return response()->json(['error' => 'Utilisateur non trouvé'], 404);
-            }
-        
-            // Mettre à jour le mot de passe
-            $user->password = bcrypt($request->password);
-            $user->save();
-        
-            // Supprimer l'entrée de réinitialisation
-            DB::table('password_resets')->where('telephone', $request->telephone)->delete();
-        
-            return response()->json(['message' => 'Mot de passe réinitialisé avec succès'], 200);
-           }catch(\Exception $e){
-            return response()->json(['error' => 'Réinitialisation du mot de passe échouée: ' . $e->getMessage()], 500);
+           try {
+               $request->validate([
+                   'token' => 'required',
+                   'telephone' => 'required',
+                   'password' => 'required|string|min:8|confirmed',
+               ]);
+       
+               // Récupération de l'entrée password_resets
+               $reset = DB::table('password_resets')
+                   ->where('telephone', $request->telephone)
+                   ->first();
+       
+               // Vérification de l'existence et de la validité du token SHA256
+               if (
+                   !$reset ||
+                   !hash_equals($reset->token, hash('sha256', $request->token))
+               ) {
+                   return response()->json(['error' => 'Token ou téléphone invalide'], 400);
+               }
+       
+               // Récupération de l'utilisateur
+               $user = User::where('telephone', $request->telephone)->first();
+       
+               if (!$user) {
+                   return response()->json(['error' => 'Utilisateur non trouvé'], 404);
+               }
+       
+               // Mise à jour du mot de passe (avec bcrypt)
+               $user->password = bcrypt($request->password);
+               $user->save();
+       
+               // Suppression de la demande de réinitialisation
+               DB::table('password_resets')
+                   ->where('telephone', $request->telephone)
+                   ->delete();
+       
+               return response()->json(['message' => 'Mot de passe réinitialisé avec succès'], 200);
+           } catch (\Exception $e) {
+               return response()->json(['error' => 'Réinitialisation du mot de passe échouée: ' . $e->getMessage()], 500);
            }
        }
 }

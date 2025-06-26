@@ -3,21 +3,23 @@ use App\Http\Controllers\AIController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\ClientController;
 use App\Http\Controllers\GestionUtilisateur;
+use App\Http\Controllers\ProduitController;
 use App\Http\Controllers\VenteController;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Auth;
 Route::post('/ai/ask', [AIController::class, 'ask']);
 Route::post('/register', [AuthController::class, 'register'])->name('register');
 Route::post('/login', [AuthController::class, 'login']);
+Route::post('/mot-de-passe/oublie-par-telephone', [AuthController::class, 'demandeMotDePasseOublie']);
+Route::post('/reset-password', action: [AuthController::class, 'resetPassword']);
 Route::middleware('auth:api')->get('/notifications', function () {
     return auth::user()->notifications()->latest()->take(10)->get();
 });
 Route::middleware('jwt')->group(function () {
-    Route::get('/logout', [AuthController::class, 'logout'])->name('logout');
+    Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
     Route::get('/user', [AuthController::class, 'user'])->name('user');
     Route::post('/refresh', [AuthController::class, 'refresh'])->name('refresh');
-    Route::post('/mot-de-passe/oublie-par-telephone', [AuthController::class, 'demandeMotDePasseOublie']);
-    Route::post('/reset-password', action: [AuthController::class, 'resetPassword']);
+
 
    
     //route pour la gestion clients
@@ -53,6 +55,9 @@ Route::middleware('jwt')->group(function () {
     Route::get('/export_mes_utilisateurs', [GestionUtilisateur::class, 'exportMesUtilisateurs'])->name('utilisateurs.exportMesUtilisateurs');
     Route::get('/export_mes_ventes', [VenteController::class, 'exportMesVentes'])->name('ventes.exportMesVentes');
     Route::get('/verifier_utilisateur_actif/{id}', [GestionUtilisateur::class, 'isActif'])->name('utilisateurs.isActif');
+
+    Route::get('/produits', [ProduitController::class, 'index'])->name('produits.index');
+    Route::post('/ajouter/produits', [ProduitController::class, 'store'])->name('produits.store');
 });
 Route::get('/ventes', [VenteController::class, 'index'])->name('ventes.index');
 Route::get('/ventes_par_client/{id}', [VenteController::class, 'ventesParClient'])->name('ventes.ventesParClient');

@@ -63,31 +63,37 @@ class ClientController extends Controller
             // Récupérer l'utilisateur connecté
             $user = Auth::user();
             if (!$user) {
-                return response()->json(['error' => 'Unauthorized'], 401);
+                return response()->json([
+                    'error' => 'Aucun utilisateur authentifié',
+                    'headers' => $request->headers->all()
+                ], 401);
             }
-    
+          
             // Validation
             $validatedData = $request->validate([
                 'prenom' => 'required|string|max:255',
                 'nom' => 'required|string|max:255',
                 'telephone' => 'required|string|max:15',
                 'adresse' => 'nullable|string|max:255',
-                'statut' => 'required|string|max:50',
+
                 'type' => 'required|string|max:50',
                 'date_vente' => 'required|date',
                 'produits' => 'required|array|min:1',
                 'produits.*.nom' => 'required|string|max:255',
                 'produits.*.quantite' => 'required|integer|min:1',
                 'produits.*.prix_unitaire' => 'required|numeric|min:0',
+                
+
+                
             ]);
     
             // Création du client
             $client = Client::create([
-                'nom' => $validatedData['prenom'],
-                'prenom' => $validatedData['nom'],
+                'prenom' => $validatedData['prenom'],
+                'nom' => $validatedData['nom'],
                 'telephone' => $validatedData['telephone'],
                 'adresse' => $validatedData['adresse'] ?? null,
-                'statut' => $validatedData['statut'],
+                'statut' => 'actif',
                 'type' => $validatedData['type'],
                 'user_id' => $user->id,
             ]);
@@ -96,20 +102,27 @@ class ClientController extends Controller
           $vente = $client->ventes()->create(); // client_id automatiquement assigné
 
           // Boucle sur les produits
-          foreach ($validatedData['produits'] as $produitData) {
-              $produit = Produit::firstOrCreate(
-                  ['nom' => $produitData['nom']],
-                  ['image' => null]
-              );
-          
-              $vente->produits()->attach($produit->id, [
-                  'quantite' => $produitData['quantite'],
-                  'prix_unitaire' => $produitData['prix_unitaire'],
-                  'montant_total' => $produitData['quantite'] * $produitData['prix_unitaire'],
-                  'date_vente' => $validatedData['date_vente'],
-              ]);
-          }
-
+          foreach ($request->input('produits') as $index => $produitData) {
+            $imagePath = null;
+            if ($request->hasFile("produits.$index.image")) {
+                $image = $request->file("produits.$index.image");
+                $imageName = time() . '_' . uniqid() . '.' . $image->getClientOriginalExtension();
+                $imagePath = $image->storeAs('produits', $imageName, 'public');
+            }
+        
+            $produit = Produit::firstOrCreate(
+                ['nom' => $produitData['nom']],
+                ['image' => $imagePath]
+            );
+        
+            $vente->produits()->attach($produit->id, [
+                'quantite' => $produitData['quantite'],
+                'prix_unitaire' => $produitData['prix_unitaire'],
+                'montant_total' => $produitData['quantite'] * $produitData['prix_unitaire'],
+                'date_vente' => $validatedData['date_vente'],
+            ]);
+        }
+        
             DB::commit();
     
             return response()->json([
@@ -206,7 +219,7 @@ class ClientController extends Controller
   //rechercher un client par son nom
   public function search(Request $request)
   {
-      $searchTerm = $request->input('query');
+      $searchTerm = $request->input('q');
   
       if (!$searchTerm) {
           return response()->json(['error' => 'Search query is required'], 400);
@@ -214,10 +227,12 @@ class ClientController extends Controller
   
       $clients = Client::where('nom', 'LIKE', '%' . $searchTerm . '%')
           ->orWhere('prenom', 'LIKE', '%' . $searchTerm . '%')
+          ->orWhere('telephone', 'LIKE', '%' . $searchTerm . '%')
           ->get();
   
       return response()->json($clients);
   }
+  
   //filtrer les client par date de vente
     public function filterByDate(Request $request)
     {
