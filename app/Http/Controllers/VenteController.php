@@ -10,6 +10,8 @@ use App\Models\Vente;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Auth;
+use Carbon\Carbon;
+use Illuminate\Support\Facades\Log;
 class VenteController extends Controller
 {
     /**
@@ -85,20 +87,25 @@ public function noterVente($id, $satisfaite)
 //afficher les ventes notees non satisfaisantes d'un vedenteur spécifique
 public function mesVentes(){
     $userId = Auth::id();
-    $ventes = Vente::where('user_id', $userId)->with('produits')->get();
-    
+
+    $ventes = Vente::where('user_id', $userId)
+        ->with(['produits', 'client', 'feedback']) // ⬅️ important ici
+        ->get();
+
     if ($ventes->isEmpty()) {
         return response()->json([
             'status' => 'error',
             'message' => 'Aucune vente trouvée pour cet utilisateur.'
         ], 404);
     }
-    
+
     return response()->json([
         'status' => 'success',
         'data' => $ventes
     ]);
 }
+
+
 public function ventesNonSatisfaites(){
     
     $ventes=Vente::whereHas('feedback',function($query){
@@ -123,67 +130,87 @@ public function ventesNonSatisfaites(){
      */
     //stocker une nouvelle vente pour un client existant
     public function store(Request $request)
-{
-    DB::beginTransaction();
-
-    try {
-        $validatedData = $request->validate([
-            'client_id' => 'required|exists:clients,id',
-            'produits' => 'required|array|min:1',
-            'produits.*.nom' => 'required|string|max:255',
-            'produits.*.quantite' => 'required|integer|min:1',
-            'produits.*.prix_unitaire' => 'required|numeric|min:0',
-            'date_vente' => 'nullable|date',
-        ]);
+    {
+        DB::beginTransaction();
+    
         $user = Auth::user();
-            if (!$user) {
-                return response()->json(['error' => 'Unauthorized'], 401);
-            }
-        $dateVente = $validatedData['date_vente'] ?? now();
-
-        // Calculer le montant total de la vente
-        $montant_total = 0;
-        foreach ($validatedData['produits'] as $produitData) {
-            $montant_total += $produitData['quantite'] * $produitData['prix_unitaire'];
+        if (!$user) {
+            return response()->json(['message' => 'Unauthorized'], 401);
         }
-
-        // Créer la vente
-        $vente = Vente::create([
-            'client_id' => $validatedData['client_id'],
-            'user_id' => $user->id,
-        ]);
-
-        // Ajouter les produits
-        foreach ($validatedData['produits'] as $produitData) {
-            $produit = Produit::firstOrCreate(
-                ['nom' => $produitData['nom']],
-                ['image' => null]
-            );
-
-            $vente->produits()->attach($produit->id, [
-                'quantite' => $produitData['quantite'],
-                'prix_unitaire' => $produitData['prix_unitaire'],
-                'montant_total' => $produitData['quantite'] * $produitData['prix_unitaire'],
-                'date_vente' => $dateVente,
+    
+        try {
+            // Validation
+            $validatedData = $request->validate([
+                'client_id' => 'nullable|exists:clients,id',
+                'prenom' => 'required_without:client_id|string|max:255',
+                'nom' => 'required_without:client_id|string|max:255',
+                'telephone' => 'nullable|string|max:255',
+                'adresse' => 'nullable|string|max:255',
+                'type' => 'nullable|in:restaurateur,particulier,boutique',
+                'produits' => 'required|array|min:1',
+                'produits.*.produit_id' => 'required|exists:produits,id',
+                'produits.*.quantite' => 'required|integer|min:1',
             ]);
+    
+            // Création ou récupération client
+            if (!empty($validatedData['client_id'])) {
+                $client = Client::findOrFail($validatedData['client_id']);
+            } else {
+                $client = Client::create([
+                    'prenom' => $validatedData['prenom'],
+                    'nom' => $validatedData['nom'],
+                    'telephone' => $validatedData['telephone'],
+                    'adresse' => $validatedData['adresse'],
+                    'type' => $validatedData['type'] ?? 'particulier',
+                    'statut' => 'actif',
+                    'user_id' => $user->id,
+                ]);
+            }
+    
+            // Création de la vente
+            $vente = Vente::create([
+                'client_id' => $client->id,
+                'user_id' => $user->id,
+            ]);
+    
+            // Attacher les produits et gérer le stock
+            foreach ($validatedData['produits'] as $item) {
+                $produit = Produit::findOrFail($item['produit_id']);
+                $quantite = $item['quantite'];
+                $prixUnitaire = $produit->prix_unitaire;
+                $montant = $quantite * $prixUnitaire;
+                // Vérification du stock
+                if ($produit->stock < $quantite) {
+                    throw new \Exception("Stock insuffisant pour le produit {$produit->nom}");
+                }
+                $produit->stock -= $quantite;
+                $produit->save();
+    
+                $vente->produits()->attach($produit->id, [
+                    'quantite' => $quantite,
+                    'prix_unitaire' => $prixUnitaire,
+                    'montant_total' => $montant,
+                    'date_vente' => now(),
+                ]);
+            }
+    
+            DB::commit();
+    
+            return response()->json([
+                'message' => 'Vente enregistrée avec succès.',
+                'vente' => $vente->load('client', 'produits'),
+            ], 201);
+    
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json([
+                'message' => 'Erreur lors de l’enregist rement de la vente.',
+                'error' => $e->getMessage(),
+            ], 500);
         }
-
-        DB::commit();
-
-        return response()->json([
-            'status' => 'success',
-            'message' => 'Vente créée avec succès',
-            'data' => $vente->load('produits') 
-        ]);
-    } catch (\Exception $e) {
-        DB::rollBack();
-        return response()->json([
-            'status' => 'error',
-            'message' => 'Erreur lors de la création de la vente',
-            'error' => $e->getMessage(),
-        ], 500);
     }
-}
+    
+    
 
     /**
      * Display the specified resource.
@@ -225,14 +252,25 @@ public function ventesNonSatisfaites(){
     /**
      * Remove the specified resource from storage.
      */
-    public function destroy(Vente $vente)
+    public function destroy($id)
     {
+        $vente = Vente::find($id);
+    
+        if (!$vente) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Vente non trouvée'
+            ], 404);
+        }
+    
         $vente->delete();
+    
         return response()->json([
-            'status'=>'success',
-            'message'=>'vente supprimée avec succès'
+            'status' => 'success',
+            'message' => 'Vente supprimée avec succès'
         ]);
     }
+    
 
     public function noterParLien($id)
 {
@@ -287,6 +325,84 @@ public function ventesNonSatisfaites(){
 
     return response('<h2>Merci pour votre réponse !</h2>', 200)
         ->header('Content-Type', 'text/html');
+}
+//lancer une conversation WhatsApp avec le client
+
+public function lancerConversationWhatsAppVente($id)
+{
+    $vente = Vente::with('client')->find($id);
+
+    if (!$vente) {
+        return response()->json(['error' => 'Vente introuvable.'], 404);
+    }
+
+    $client = $vente->client;
+
+    if (!$client || empty($client->telephone)) {
+        return response()->json(['error' => 'Client introuvable ou numéro manquant.'], 404);
+    }
+
+    // Nettoyer et vérifier le numéro
+    $telephone = preg_replace('/\D/', '', $client->telephone);
+
+    if (strlen($telephone) < 9) {
+        return response()->json(['error' => 'Numéro de téléphone invalide.'], 400);
+    }
+
+    return response()->json([
+        'whatsapp_link' => "https://wa.me/221$telephone",
+        'call_link' => "tel:+221$telephone",
+    ]);
+}
+public function nombreVentesAujourdHui()
+{
+    $user = Auth::user();
+
+    if (!$user) {
+        return response()->json(['error' => 'Unauthorized'], 401);
+    }
+
+    $aujourdhui = Carbon::today();
+
+    $nombreVentes = Vente::where('user_id', $user->id)
+                         ->whereDate('created_at', $aujourdhui)
+                         ->count();
+
+    return response()->json([
+        'success' => true,
+        'nombre_ventes_aujourdhui' => $nombreVentes
+    ]);
+}
+public function revenusDuMois()
+{
+    try {
+        $user = Auth::user();
+
+        if (!$user) {
+            return response()->json(['error' => 'Unauthorized'], 401);
+        }
+
+        $debutMois = Carbon::now()->startOfMonth();
+        $finMois = Carbon::now()->endOfMonth();
+
+        $revenus = DB::table('produit_ventes')
+            ->join('ventes', 'produit_ventes.vente_id', '=', 'ventes.id')
+            ->where('ventes.user_id', $user->id)
+            ->whereBetween('ventes.created_at', [$debutMois, $finMois])
+            ->sum('produit_ventes.montant_total');
+
+        return response()->json([
+            'success' => true,
+            'revenus_du_mois' => $revenus
+        ]);
+    } catch (\Exception $e) {
+        Log::error('Erreur revenusDuMois: ' . $e->getMessage());
+        return response()->json([
+            'success' => false,
+            'message' => 'Erreur interne serveur',
+            'details' => $e->getMessage()
+        ], 500);
+    }
 }
 
 }

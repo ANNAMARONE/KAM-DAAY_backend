@@ -16,6 +16,9 @@ class Produit extends Model
             ->withPivot(['quantite', 'prix_unitaire', 'montant_total', 'date_vente'])
             ->withTimestamps();
     }
-    
+    public function user()
+{
+    return $this->belongsTo(User::class);
+}
 
 }

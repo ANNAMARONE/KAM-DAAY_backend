@@ -18,6 +18,10 @@ public function ventes()
 {
     return $this->hasMany(Vente::class);
 }
+public function produits()
+{
+    return $this->hasMany(Produit::class);
+}
 
 
 }
