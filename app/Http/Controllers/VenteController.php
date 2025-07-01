@@ -10,6 +10,8 @@ use App\Models\Vente;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Auth;
+use Carbon\Carbon;
+use Illuminate\Support\Facades\Log;
 class VenteController extends Controller
 {
     /**
@@ -85,20 +87,25 @@ public function noterVente($id, $satisfaite)
 //afficher les ventes notees non satisfaisantes d'un vedenteur spécifique
 public function mesVentes(){
     $userId = Auth::id();
-    $ventes = Vente::where('user_id', $userId)->with('produits')->get();
-    
+
+    $ventes = Vente::where('user_id', $userId)
+        ->with(['produits', 'client', 'feedback']) // ⬅️ important ici
+        ->get();
+
     if ($ventes->isEmpty()) {
         return response()->json([
             'status' => 'error',
             'message' => 'Aucune vente trouvée pour cet utilisateur.'
         ], 404);
     }
-    
+
     return response()->json([
         'status' => 'success',
         'data' => $ventes
     ]);
 }
+
+
 public function ventesNonSatisfaites(){
     
     $ventes=Vente::whereHas('feedback',function($query){
@@ -197,7 +204,7 @@ public function ventesNonSatisfaites(){
         } catch (\Exception $e) {
             DB::rollBack();
             return response()->json([
-                'message' => 'Erreur lors de l’enregistrement de la vente.',
+                'message' => 'Erreur lors de l’enregist rement de la vente.',
                 'error' => $e->getMessage(),
             ], 500);
         }
@@ -245,14 +252,25 @@ public function ventesNonSatisfaites(){
     /**
      * Remove the specified resource from storage.
      */
-    public function destroy(Vente $vente)
+    public function destroy($id)
     {
+        $vente = Vente::find($id);
+    
+        if (!$vente) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Vente non trouvée'
+            ], 404);
+        }
+    
         $vente->delete();
+    
         return response()->json([
-            'status'=>'success',
-            'message'=>'vente supprimée avec succès'
+            'status' => 'success',
+            'message' => 'Vente supprimée avec succès'
         ]);
     }
+    
 
     public function noterParLien($id)
 {
@@ -307,6 +325,84 @@ public function ventesNonSatisfaites(){
 
     return response('<h2>Merci pour votre réponse !</h2>', 200)
         ->header('Content-Type', 'text/html');
+}
+//lancer une conversation WhatsApp avec le client
+
+public function lancerConversationWhatsAppVente($id)
+{
+    $vente = Vente::with('client')->find($id);
+
+    if (!$vente) {
+        return response()->json(['error' => 'Vente introuvable.'], 404);
+    }
+
+    $client = $vente->client;
+
+    if (!$client || empty($client->telephone)) {
+        return response()->json(['error' => 'Client introuvable ou numéro manquant.'], 404);
+    }
+
+    // Nettoyer et vérifier le numéro
+    $telephone = preg_replace('/\D/', '', $client->telephone);
+
+    if (strlen($telephone) < 9) {
+        return response()->json(['error' => 'Numéro de téléphone invalide.'], 400);
+    }
+
+    return response()->json([
+        'whatsapp_link' => "https://wa.me/221$telephone",
+        'call_link' => "tel:+221$telephone",
+    ]);
+}
+public function nombreVentesAujourdHui()
+{
+    $user = Auth::user();
+
+    if (!$user) {
+        return response()->json(['error' => 'Unauthorized'], 401);
+    }
+
+    $aujourdhui = Carbon::today();
+
+    $nombreVentes = Vente::where('user_id', $user->id)
+                         ->whereDate('created_at', $aujourdhui)
+                         ->count();
+
+    return response()->json([
+        'success' => true,
+        'nombre_ventes_aujourdhui' => $nombreVentes
+    ]);
+}
+public function revenusDuMois()
+{
+    try {
+        $user = Auth::user();
+
+        if (!$user) {
+            return response()->json(['error' => 'Unauthorized'], 401);
+        }
+
+        $debutMois = Carbon::now()->startOfMonth();
+        $finMois = Carbon::now()->endOfMonth();
+
+        $revenus = DB::table('produit_ventes')
+            ->join('ventes', 'produit_ventes.vente_id', '=', 'ventes.id')
+            ->where('ventes.user_id', $user->id)
+            ->whereBetween('ventes.created_at', [$debutMois, $finMois])
+            ->sum('produit_ventes.montant_total');
+
+        return response()->json([
+            'success' => true,
+            'revenus_du_mois' => $revenus
+        ]);
+    } catch (\Exception $e) {
+        Log::error('Erreur revenusDuMois: ' . $e->getMessage());
+        return response()->json([
+            'success' => false,
+            'message' => 'Erreur interne serveur',
+            'details' => $e->getMessage()
+        ], 500);
+    }
 }
 
 }

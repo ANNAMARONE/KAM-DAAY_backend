@@ -449,5 +449,38 @@ public function clientsInsatisfaitsRecurrents()
         'clients_insatisfaits_recurrents' => $clients
     ]);
 }
+public function lancerConversationWhatsApp($id)
+{
+    $client = Client::find($id);
+    
+    if (!$client) {
+        return response()->json(['error' => 'Client not found'], 404);
+    }
+    
+    $telephone = preg_replace('/\D/', '', $client->telephone); // Nettoyer le numéro de téléphone
+    
+    return response()->json([
+        'whatsapp_link' => "https://wa.me/221$telephone",
+        'call_link' => "tel:+221$telephone",
+    ]);
+}
+
+//le nombre de cliens ajouter par l'utilisateur connecté
+
+public function nombreClients()
+{
+    $user = Auth::user();
+
+    if (!$user) {
+        return response()->json(['error' => 'Unauthorized'], 401);
+    }
+
+    $nombreClients = Client::where('user_id', $user->id)->count();
+
+    return response()->json([
+        'success' => true,
+        'nombre_clients' => $nombreClients
+    ]);
+}
 
 }

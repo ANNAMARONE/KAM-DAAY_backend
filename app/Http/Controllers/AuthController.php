@@ -17,42 +17,39 @@ class AuthController extends Controller
     public function register(Request $request)
     {
         try {
-            // ✅ Validation ajustée (role et statut sont maintenant optionnels)
+            // Validation ajustée (role et statut sont maintenant optionnels)
             $validatedData = $request->validate([
-                'profile' => 'required|image|mimes:jpeg,png,jpg,gif,svg|max:2048',
+                
                 'username' => 'required|string|max:255',
                 'password' => 'required|string|min:8|confirmed',
                 'telephone' => 'required|unique:users,telephone|regex:/^([0-9\s\-\+\(\)]*)$/|min:9',
                 'role' => 'nullable|in:admin,vendeuse', 
-                'localite' => 'required|string|max:255',
                 'statut' => 'nullable|in:actif,inactif', 
                 'domaine_activite' => 'required|string|in:halieutique,Agroalimentaire,Artisanat local,Savons / Cosmétiques,Jus locaux',
                 'GIE' => 'nullable|string|max:255', // GIE est optionnel
             ]);
     
-            // 📁 Gestion de l'image
-            $filename = null;
+            // Gestion de l'image
+            // $filename = null;
             if ($request->hasFile('profile')) {
                 $file = $request->file('profile');
                 $filename = time() . '.' . $file->getClientOriginalExtension();
                 $file->move(public_path('images/profiles'), $filename);
             }
-            if (!$filename) {
-                return response()->json(['error' => 'Profile image is required'], 422);
-            }
+         
     
-            // 🧠 Valeurs par défaut
+            // Valeurs par défaut
             $role = $validatedData['role'] ?? 'vendeuse';
             $statut = $validatedData['statut'] ?? 'inactif';
     
-            // 🧑 Création de l'utilisateur
+            // Création de l'utilisateur
             $user = User::create([
-                'profile' => $filename,
+                'profile' => $filename ?? null, // Utilisation de l'image si elle existe
                 'username' => $validatedData['username'],
                 'password' => bcrypt($validatedData['password']),
                 'telephone' => $validatedData['telephone'],
                 'role' => $role,
-                'localite' => $validatedData['localite'],
+                'localite' => $request->input('localite', 'mbour'), // Valeur par défaut pour localité
                 'statut' => $statut,
                 'domaine_activite' => $validatedData['domaine_activite'],
                 'GIE' => $validatedData['GIE'] ?? null,
@@ -194,15 +191,13 @@ class AuthController extends Controller
                Log::warning("Utilisateur non trouvé pour téléphone: $telephone");
                return response()->json([
                    'status' => 'error',
-                   'message' => 'Utilisateur non trouvé'
+                   'message' => 'Aucun utilisateur trouvé avec ce numéro.'
                ], 404);
            }
        
-           // Générer un token sécurisé
            $token = Str::random(60);
            $hashedToken = hash('sha256', $token);
        
-           // Enregistrer ou mettre à jour le token
            DB::table('password_resets')->updateOrInsert(
                ['telephone' => $telephone],
                [
@@ -211,64 +206,56 @@ class AuthController extends Controller
                ]
            );
        
-           // Lien de réinitialisation
-           $resetLink = "http://localhost:5173/reset-password?token=$token&telephone=$telephone";
-       
-           // Message WhatsApp
-           $nom = $utilisateur->name ?? 'cher utilisateur';
-           $message = "Bonjour {$utilisateur->name}, cliquez ici pour réinitialiser votre mot de passe : $resetLink";
-         
-           $wa_link = "https://wa.me/221$telephone?text=" . urlencode($message);
-       
-           Log::info("Lien WhatsApp généré : " . $wa_link);
-       
            return response()->json([
                'status' => 'success',
-               'whatsapp_link' => $wa_link
+               'message' => 'Token généré avec succès.',
+               'token' => $token,
+               'telephone' => $telephone
            ]);
        }
        
        public function resetPassword(Request $request)
        {
-           try {
-               $request->validate([
-                   'token' => 'required',
-                   'telephone' => 'required',
-                   'password' => 'required|string|min:8|confirmed',
-               ]);
+           $request->validate([
+               'token' => 'required',
+               'telephone' => 'required',
+               'password' => 'required|string|min:8|confirmed',
+           ]);
        
-               // Récupération de l'entrée password_resets
-               $reset = DB::table('password_resets')
-                   ->where('telephone', $request->telephone)
-                   ->first();
+           $reset = DB::table('password_resets')
+               ->where('telephone', $request->telephone)
+               ->first();
        
-               // Vérification de l'existence et de la validité du token SHA256
-               if (
-                   !$reset ||
-                   !hash_equals($reset->token, hash('sha256', $request->token))
-               ) {
-                   return response()->json(['error' => 'Token ou téléphone invalide'], 400);
-               }
-       
-               // Récupération de l'utilisateur
-               $user = User::where('telephone', $request->telephone)->first();
-       
-               if (!$user) {
-                   return response()->json(['error' => 'Utilisateur non trouvé'], 404);
-               }
-       
-               // Mise à jour du mot de passe (avec bcrypt)
-               $user->password = bcrypt($request->password);
-               $user->save();
-       
-               // Suppression de la demande de réinitialisation
-               DB::table('password_resets')
-                   ->where('telephone', $request->telephone)
-                   ->delete();
-       
-               return response()->json(['message' => 'Mot de passe réinitialisé avec succès'], 200);
-           } catch (\Exception $e) {
-               return response()->json(['error' => 'Réinitialisation du mot de passe échouée: ' . $e->getMessage()], 500);
+           if (
+               !$reset ||
+               !hash_equals($reset->token, hash('sha256', $request->token))
+           ) {
+               return response()->json([
+                   'status' => 'error',
+                   'message' => 'Token ou téléphone invalide.'
+               ], 400);
            }
+       
+           $user = User::where('telephone', $request->telephone)->first();
+       
+           if (!$user) {
+               return response()->json([
+                   'status' => 'error',
+                   'message' => 'Utilisateur non trouvé.'
+               ], 404);
+           }
+       
+           $user->password = bcrypt($request->password);
+           $user->save();
+       
+           DB::table('password_resets')
+               ->where('telephone', $request->telephone)
+               ->delete();
+       
+           return response()->json([
+               'status' => 'success',
+               'message' => 'Mot de passe réinitialisé avec succès.'
+           ]);
        }
+       
 }

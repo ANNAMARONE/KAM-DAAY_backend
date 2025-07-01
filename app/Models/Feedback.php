@@ -13,5 +13,11 @@ class Feedback extends Model
 {
     return $this->belongsTo(Vente::class);
 }
+public function client()
+{
+    // Supposons que la table feedback a une colonne client_id
+    return $this->belongsTo(Client::class);
+}
+
 
 }
