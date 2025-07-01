@@ -52,6 +52,7 @@ Route::middleware('jwt')->group(function () {
     Route::post('/ajouter_vente', [VenteController::class, 'store'])->name('ventes.store');
     Route::get('/contact_client/{id}', [ClientController::class, 'contactLinks']);
    Route::get('/contactMesClient', [ClientController::class, 'contactClients']);
+    Route::get('/clients/recents', [ClientController::class, 'clientsRecents']);
     //route pour la gestion des utilisateurs
     Route::get('/utilisateurs', [GestionUtilisateur::class, 'index'])->name('utilisateurs.index');   
     Route::post('/activer_utilisateur/{id}', [GestionUtilisateur::class, 'activerUtilisateur'])->name('utilisateurs.activer'); 

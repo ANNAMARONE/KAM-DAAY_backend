@@ -482,5 +482,20 @@ public function nombreClients()
         'nombre_clients' => $nombreClients
     ]);
 }
+//afficher les trois clients les plus récents de l'utilisateur connecté
+public function clientsRecents()
+{
+    $user = Auth::user();
 
+    if (!$user) {
+        return response()->json(['error' => 'Unauthorized'], 401);
+    }
+
+    $clients = Client::where('user_id', $user->id)
+        ->orderBy('created_at', 'desc')
+        ->take(3)
+        ->get();
+
+    return response()->json($clients);
+}
 }
