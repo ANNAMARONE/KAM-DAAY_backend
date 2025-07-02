@@ -1,12 +1,16 @@
 <?php
+
+use App\Http\Controllers\AdminController;
 use App\Http\Controllers\AIController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\ClientController;
 use App\Http\Controllers\FeedbackController;
 use App\Http\Controllers\GestionUtilisateur;
+use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\ProduitController;
 use App\Http\Controllers\StatistiqueController;
 use App\Http\Controllers\VenteController;
+use App\Models\Notification;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Auth;
 Route::post('/ai/ask', [AIController::class, 'ask']);
@@ -47,6 +51,8 @@ Route::middleware('jwt')->group(function () {
     Route::get('/taux-satisfaction-positif', [FeedbackController::class, 'tauxSatisfactionPositif']);
     Route::get('/statistiques', [StatistiqueController::class, 'statistiques']);
     Route::get('/feedbacks-recents', [FeedbackController::class, 'getFeedbacksRecents']);
+    Route::post('/notifications/{id}/read', [NotificationController::class, 'markAsRead']);
+
     //route pour la gestion des ventes
     Route::get('/mes_ventes', [VenteController::class, 'mesVentes'])->name('ventes.mesVentes');
     Route::post('/ajouter_vente', [VenteController::class, 'store'])->name('ventes.store');
@@ -75,7 +81,13 @@ Route::middleware('jwt')->group(function () {
     Route::put('/produits/{produit}', [ProduitController::class, 'update']);
     Route::delete('/produits/{produit}', [ProduitController::class, 'destroy']);
     Route::get('/produit/{id}',[ProduitController::class,'show']);
-
+    //route pour admin 
+    Route::get('/admin/nombre-utilisateurs', [AdminController::class, 'nombreUtilisateurs']);
+    Route::get('/admin/nombre-ventes', [AdminController::class, 'nombreVentes']);
+    Route::get('/admin/nombre-vendeuses', [AdminController::class, 'nombreVendeuses']);
+    Route::get('/admin/nombre-produits', [AdminController::class, 'nombreProduits']);
+    Route::get('/admin/nombre-clients', [AdminController::class, 'nombreClient']);
+    Route::get('/admin/vendeuses', [AdminController::class, 'vendeuses'])->name('admin.vendeuses');
 });
 Route::get('/ventes', [VenteController::class, 'index'])->name('ventes.index');
 Route::get('/ventes_par_client/{id}', [VenteController::class, 'ventesParClient'])->name('ventes.ventesParClient');

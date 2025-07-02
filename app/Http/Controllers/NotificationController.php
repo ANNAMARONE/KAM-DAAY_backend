@@ -14,13 +14,25 @@ class NotificationController extends Controller
      */
     public function index(Request $request)
     {
-        $user = $request->user(); 
-
+        $user = $request->user();
+    
         return response()->json([
-            'status' => 'success',
-            'notifications' => $user->notifications, 
+            'notifications' => $user->notifications,
+            'unread_count' => $user->unreadNotifications->count()
         ]);
     }
+    public function markAsRead($id)
+    {
+        $notification = auth()->user()->notifications()->findOrFail($id);
+    
+        if ($notification->read_at === null) {
+            $notification->markAsRead();
+        }
+    
+        return response()->json(['status' => 'success']);
+    }
+        
+    
 
     /**
      * Show the form for creating a new resource.
