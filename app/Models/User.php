@@ -31,6 +31,12 @@ public function ventes()
 {
     return $this->hasMany(Vente::class);
 }
+public function produits()
+{
+    return $this->hasMany(Produit::class, 'user_id'); // ou user_id selon ta base
+}
+
+
 
     /**
      * The attributes that should be hidden for serialization.

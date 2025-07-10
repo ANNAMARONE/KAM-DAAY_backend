@@ -10,12 +10,14 @@ class GestionUtilisateur extends Controller
     //afficher la liste des utilisateurs
     public function index()
     {
-       $utilisateurs =User::all();
-       return response()->json([
-           'status' => 'success',
-           'data' => $utilisateurs
-       ]);
+        $utilisateurs = User::where('role', 'vendeuse')->get();
+    
+        return response()->json([
+            'status' => 'success',
+            'data' => $utilisateurs
+        ]);
     }
+    
     //activer un utilisateur
     public function activerUtilisateur($id)
     {
@@ -77,19 +79,26 @@ class GestionUtilisateur extends Controller
     //afficher un utilisateur
     public function show($id)
     {
-        $utilisateur = User::find($id);
+        $utilisateur = User::with([
+            'produits',
+            'ventes.produits',
+            'clients',
+            
+        ])->find($id);
+    
         if (!$utilisateur) {
             return response()->json([
                 'status' => 'error',
                 'message' => 'Utilisateur non trouvé'
             ], 404);
         }
-
+    
         return response()->json([
             'status' => 'success',
             'data' => $utilisateur
         ]);
     }
+    
    //modifier un utilisateur
     public function update(Request $request, $id)
     {
@@ -133,29 +142,26 @@ class GestionUtilisateur extends Controller
     //rechercher un utilisateur par son nom
     public function rechercheUtilisateur(Request $request)
     {
-        $nom = $request->input('nom');
+        $query = trim($request->input('q'));
     
-        if (!$nom) {
+        if (empty($query)) {
             return response()->json([
                 'status' => 'error',
-                'message' => 'Veuillez fournir un nom à rechercher.'
+                'message' => 'Veuillez fournir un terme de recherche.'
             ], 400);
         }
     
-        $utilisateurs = User::where('username', 'like', '%' . $nom . '%')->get();
-    
-        if ($utilisateurs->isEmpty()) {
-            return response()->json([
-                'status' => 'error',
-                'message' => 'Aucun utilisateur trouvé.'
-            ], 404);
-        }
+        $utilisateurs = User::where('username', 'like', '%' . $query . '%')
+            
+            ->get();
     
         return response()->json([
             'status' => 'success',
             'data' => $utilisateurs
         ]);
     }
+    
+    
     
 // exporter la lists des utilisateurs 
 public function exportUtilisateurs()
