@@ -88,6 +88,8 @@ Route::middleware('jwt')->group(function () {
     Route::get('/admin/nombre-produits', [AdminController::class, 'nombreProduits']);
     Route::get('/admin/nombre-clients', [AdminController::class, 'nombreClient']);
     Route::get('/admin/vendeuses', [AdminController::class, 'vendeuses'])->name('admin.vendeuses');
+    Route::post('/admin/modifier_vendeuse/{id}', [GestionUtilisateur::class, 'update'])->name('admin.update');
+    Route::get('/admin/produits',[ProduitController::class,'afficherProduit']);
 });
 Route::get('/ventes', [VenteController::class, 'index'])->name('ventes.index');
 Route::get('/ventes_par_client/{id}', [VenteController::class, 'ventesParClient'])->name('ventes.ventesParClient');

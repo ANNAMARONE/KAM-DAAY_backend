@@ -19,9 +19,15 @@ class ClientController extends Controller
      */
     public function index()
     {
-        $clients = Client::all();
-        return response()->json($clients);
+        $clients = Client::with(['user', 'ventes.produits'])->get();
+    
+        return response()->json([
+            'status' => 'success',
+            'data' => $clients
+        ]);
     }
+    
+    
 //afficher les clients ajouter par l'utilisateur connecté
     public function mesClients()
     {

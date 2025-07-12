@@ -19,13 +19,14 @@ class VenteController extends Controller
      */
     public function index()
     {
-    $ventes=Vente::all();
-    return response()->json([
-        'status' => 'success',
-        'data' => $ventes
-    ]);
+        $ventes = Vente::with(['produits'])->get();
+    
+        return response()->json([
+            'status' => 'success',
+            'data' => $ventes
+        ]);
     }
-   
+    
     //afficher les ventes par client
     public function ventesParClient($id)
     {

@@ -185,5 +185,14 @@ class ProduitController extends Controller
         'data' => $produit
     ]);
 }
+public function afficherProduit()
+{
+    $produits = Produit::with('user')->get();
+
+    return response()->json([
+        'status' => 'success',
+        'data' => $produits
+    ]);
+}
 
 }

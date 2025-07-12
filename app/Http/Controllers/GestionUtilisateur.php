@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\User;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Validator;
 
 class GestionUtilisateur extends Controller
 {
@@ -76,6 +77,7 @@ class GestionUtilisateur extends Controller
             'message' => 'Utilisateur supprimé avec succès'
         ]);
     }
+
     //afficher un utilisateur
     public function show($id)
     {
@@ -100,24 +102,63 @@ class GestionUtilisateur extends Controller
     }
     
    //modifier un utilisateur
-    public function update(Request $request, $id)
-    {
+   public function update(Request $request, $id)
+   {
+     try{
         $utilisateur = User::find($id);
+   
         if (!$utilisateur) {
             return response()->json([
                 'status' => 'error',
                 'message' => 'Utilisateur non trouvé'
             ], 404);
         }
-
-        $utilisateur->update($request->all());
-
+    
+        $validator = Validator::make($request->all(), [
+            'username' => 'required|string|max:255',
+            'telephone' => 'required|string|max:20|unique:users,telephone,' . $id,
+            'localite' => 'nullable|string|max:255',
+             'statut' => 'required|in:actif,inactif',
+            'domaine_activite' => 'nullable|string|max:255',
+            'GIE' => 'nullable|string|max:255',
+           
+        ]);
+    
+        if ($validator->fails()) {
+            return response()->json([
+                'status' => 'error',
+                'errors' => $validator->errors()
+            ], 422);
+        }
+    
+        // Gérer le profil si une nouvelle image est envoyée
+        if ($request->hasFile('profile')) {
+            $path = $request->file('profile')->store('profiles', 'public');
+            $utilisateur->profile = $path;
+        }
+    
+        $utilisateur->username = $request->username;
+        $utilisateur->telephone = $request->telephone;
+        $utilisateur->localite = $request->localite;
+        $utilisateur->statut = $request->statut;
+        $utilisateur->domaine_activite = $request->domaine_activite;
+        $utilisateur->GIE = $request->GIE;
+        
+    
+        $utilisateur->save();
+    
         return response()->json([
             'status' => 'success',
-            'message' => 'Utilisateur mis à jour avec succès',
+            'message' => 'Compte vendeuse mis à jour avec succès',
             'data' => $utilisateur
         ]);
-    }
+     }catch(\Exception $e){
+        return response()->json([
+            'status' => 'error',
+            'message' => 'Erreur lors de la mise à jour de l\'utilisateur: ' . $e->getMessage()
+        ], 500);
+     }
+   }
     //verifier si un utilisateur est actif
     public function isActif($id){
         $utilisateur=User::find($id);
@@ -162,44 +203,43 @@ class GestionUtilisateur extends Controller
     }
     
     
-    
 // exporter la lists des utilisateurs 
-public function exportUtilisateurs()
-{
-    $utilisateurs = User::all();
-    if ($utilisateurs->isEmpty()) {
-        return response()->json([
-            'status' => 'error',
-            'message' => 'Aucun utilisateur à exporter'
-        ], 404);
-    }
-
-    $csvFileName = 'utilisateurs_' . date('Y-m-d_H-i-s') . '.csv';
-    $headers = [
-        'Content-Type' => 'text/csv',
-        'Content-Disposition' => 'attachment; filename="' . $csvFileName . '"',
-    ];
-
-    return response()->stream(function () use ($utilisateurs) {
-        $handle = fopen('php://output', 'w');
-
-        // En-têtes CSV
-        fputcsv($handle, ['ID', 'Nom', 'Adresse', 'Téléphone', 'Statut']);
-
-        // Lignes
-        foreach ($utilisateurs as $utilisateur) {
-            fputcsv($handle, [
-                $utilisateur->id,
-                $utilisateur->username,
-                $utilisateur->localite,
-                $utilisateur->telephone,
-                $utilisateur->statut,
-            ]);
+    public function exportUtilisateurs()
+    {
+        $utilisateurs = User::all();
+        if ($utilisateurs->isEmpty()) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Aucun utilisateur à exporter'
+            ], 404);
         }
 
-        fclose($handle);
-    }, 200, $headers);
-}
+        $csvFileName = 'utilisateurs_' . date('Y-m-d_H-i-s') . '.csv';
+        $headers = [
+            'Content-Type' => 'text/csv',
+            'Content-Disposition' => 'attachment; filename="' . $csvFileName . '"',
+        ];
+
+        return response()->stream(function () use ($utilisateurs) {
+            $handle = fopen('php://output', 'w');
+
+            // En-têtes CSV
+            fputcsv($handle, ['ID', 'Nom', 'Adresse', 'Téléphone', 'Statut']);
+
+            // Lignes
+            foreach ($utilisateurs as $utilisateur) {
+                fputcsv($handle, [
+                    $utilisateur->id,
+                    $utilisateur->username,
+                    $utilisateur->localite,
+                    $utilisateur->telephone,
+                    $utilisateur->statut,
+                ]);
+            }
+
+            fclose($handle);
+        }, 200, $headers);
+    }
 
    //notifier l'admin lors de la creation d'un nouvel utilisateur
     
