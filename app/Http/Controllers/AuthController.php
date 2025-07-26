@@ -154,7 +154,6 @@ class AuthController extends Controller
                 'username' => 'required|string|max:255',
                 'telephone' => 'required|regex:/^([0-9\s\-\+\(\)]*)$/|min:9',
                 'localite' => 'required|string|max:255',
-                'statut' => 'required|in:actif,inactif',
                 'domaine_activite' => 'required|string|in:halieutique,Agroalimentaire,Artisanat local,Savons / Cosmétiques,Jus locaux|max:255',
             ]);
             if($request->hasFile('profile')) {
@@ -166,7 +165,6 @@ class AuthController extends Controller
             $user->username = $validatedData['username'];
             $user->telephone = $validatedData['telephone'];
             $user->localite = $validatedData['localite'];
-            $user->statut = $validatedData['statut'] ? 'actif' : 'inactif';
             $user->domaine_activite = $validatedData['domaine_activite'];
             if($request->role=='admin'){
                 $user->assignRole('admin');

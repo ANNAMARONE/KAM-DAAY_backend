@@ -2,10 +2,13 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Client;
+use App\Models\Produit;
 use App\Models\User;
+use App\Models\Vente;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
-
+use Illuminate\Support\Facades\DB;
 class GestionUtilisateur extends Controller
 {
     //afficher la liste des utilisateurs
@@ -240,6 +243,9 @@ class GestionUtilisateur extends Controller
             fclose($handle);
         }, 200, $headers);
     }
+  
+    
+        
 
    //notifier l'admin lors de la creation d'un nouvel utilisateur
     

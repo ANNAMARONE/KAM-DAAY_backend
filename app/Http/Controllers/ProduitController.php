@@ -169,14 +169,18 @@ class ProduitController extends Controller
     public function updateStock(Request $request, Produit $produit)
 {
     $request->validate([
-        'stock' => 'required|integer|min:0',
+        'stock' => 'required|integer',
     ]);
        $user=auth::id();
     if ($produit->user_id !==$user) {
         return response()->json(['message' => 'Non autorisé'], 403);
     }
+    $nouveauStock=$produit->stock + $request->stock;
+    if ($nouveauStock < 0) {
+        return response()->json(['message' => 'Stock insuffisant'], 400);
+    }
 
-    $produit->stock = $request->stock;
+    $produit->stock = $nouveauStock;
     $produit->save();
 
     return response()->json([

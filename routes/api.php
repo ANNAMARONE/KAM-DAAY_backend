@@ -10,6 +10,7 @@ use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\ProduitController;
 use App\Http\Controllers\StatistiqueController;
 use App\Http\Controllers\VenteController;
+use App\Http\Controllers\WebhookController;
 use App\Models\Notification;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Auth;
@@ -25,9 +26,12 @@ Route::middleware('jwt')->group(function () {
     Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
     Route::get('/user', [AuthController::class, 'user'])->name('user');
     Route::post('/refresh', [AuthController::class, 'refresh'])->name('refresh');
+    Route::post('/user/update-profile', [AuthController::class, 'updateProfile']);
+
+    Route::post('/webhook/whatsapp', [WebhookController::class, 'handle']);
+    Route::get('/webhook/whatsapp', [WebhookController::class, 'verify']);
 
 
-   
     //route pour la gestion clients
     Route::get('/clients', [ClientController::class, 'index'])->name('clients.index');
     Route::get('detail_client/{client}', [ClientController::class, 'show'])->name('clients.show');
@@ -90,6 +94,8 @@ Route::middleware('jwt')->group(function () {
     Route::get('/admin/vendeuses', [AdminController::class, 'vendeuses'])->name('admin.vendeuses');
     Route::post('/admin/modifier_vendeuse/{id}', [GestionUtilisateur::class, 'update'])->name('admin.update');
     Route::get('/admin/produits',[ProduitController::class,'afficherProduit']);
+    Route::get('/stats', [VenteController::class, 'stats']);
+    Route::get('/ventes-par-mois', [VenteController::class, 'ventesParMois']);
 });
 Route::get('/ventes', [VenteController::class, 'index'])->name('ventes.index');
 Route::get('/ventes_par_client/{id}', [VenteController::class, 'ventesParClient'])->name('ventes.ventesParClient');

@@ -6,12 +6,15 @@ use App\Http\Requests\StoreVenteRequest;
 use App\Http\Requests\UpdateVenteRequest;
 use App\Models\Client;
 use App\Models\Produit;
+use App\Models\User;
 use App\Models\Vente;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Auth;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Str;
 class VenteController extends Controller
 {
     /**
@@ -131,85 +134,147 @@ public function ventesNonSatisfaites(){
      */
     //stocker une nouvelle vente pour un client existant
     public function store(Request $request)
-    {
-        DB::beginTransaction();
-    
-        $user = Auth::user();
-        if (!$user) {
-            return response()->json(['message' => 'Unauthorized'], 401);
-        }
-    
-        try {
-            // Validation
-            $validatedData = $request->validate([
-                'client_id' => 'nullable|exists:clients,id',
-                'prenom' => 'required_without:client_id|string|max:255',
-                'nom' => 'required_without:client_id|string|max:255',
-                'telephone' => 'nullable|string|max:255',
-                'adresse' => 'nullable|string|max:255',
-                'type' => 'nullable|in:restaurateur,particulier,boutique',
-                'produits' => 'required|array|min:1',
-                'produits.*.produit_id' => 'required|exists:produits,id',
-                'produits.*.quantite' => 'required|integer|min:1',
-            ]);
-    
-            // Création ou récupération client
-            if (!empty($validatedData['client_id'])) {
-                $client = Client::findOrFail($validatedData['client_id']);
-            } else {
-                $client = Client::create([
-                    'prenom' => $validatedData['prenom'],
-                    'nom' => $validatedData['nom'],
-                    'telephone' => $validatedData['telephone'],
-                    'adresse' => $validatedData['adresse'],
-                    'type' => $validatedData['type'] ?? 'particulier',
-                    'statut' => 'actif',
-                    'user_id' => $user->id,
-                ]);
-            }
-    
-            // Création de la vente
-            $vente = Vente::create([
-                'client_id' => $client->id,
+{
+    DB::beginTransaction();
+
+    $user = Auth::user();
+    if (!$user) {
+        return response()->json(['message' => 'Unauthorized'], 401);
+    }
+
+    try {
+        // Validation des données
+        $validatedData = $request->validate([
+            'client_id' => 'nullable|exists:clients,id',
+            'prenom' => 'required_without:client_id|string|max:255',
+            'nom' => 'required_without:client_id|string|max:255',
+            'telephone' => 'nullable|string|max:255',
+            'adresse' => 'nullable|string|max:255',
+            'type' => 'nullable|in:restaurateur,particulier,boutique',
+            'produits' => 'required|array|min:1',
+            'produits.*.produit_id' => 'required|exists:produits,id',
+            'produits.*.quantite' => 'required|integer|min:1',
+        ]);
+
+        // Création ou récupération du client
+        $client = !empty($validatedData['client_id'])
+            ? Client::findOrFail($validatedData['client_id'])
+            : Client::create([
+                'prenom' => $validatedData['prenom'],
+                'nom' => $validatedData['nom'],
+                'telephone' => $validatedData['telephone'],
+                'adresse' => $validatedData['adresse'],
+                'type' => $validatedData['type'] ?? 'particulier',
+                'statut' => 'actif',
                 'user_id' => $user->id,
             ]);
-    
-            // Attacher les produits et gérer le stock
-            foreach ($validatedData['produits'] as $item) {
-                $produit = Produit::findOrFail($item['produit_id']);
-                $quantite = $item['quantite'];
-                $prixUnitaire = $produit->prix_unitaire;
-                $montant = $quantite * $prixUnitaire;
-                // Vérification du stock
-                if ($produit->stock < $quantite) {
-                    throw new \Exception("Stock insuffisant pour le produit {$produit->nom}");
+
+        // Création de la vente
+        $vente = Vente::create([
+            'client_id' => $client->id,
+            'user_id' => $user->id,
+        ]);
+
+        // Traitement des produits
+        foreach ($validatedData['produits'] as $item) {
+            $produit = Produit::findOrFail($item['produit_id']);
+            $quantite = $item['quantite'];
+            $prixUnitaire = $produit->prix_unitaire;
+            $montant = $quantite * $prixUnitaire;
+
+            if ($produit->stock < $quantite) {
+                throw new \Exception("Stock insuffisant pour le produit {$produit->nom}");
+            }
+
+            $produit->decrement('stock', $quantite);
+
+            $vente->produits()->attach($produit->id, [
+                'quantite' => $quantite,
+                'prix_unitaire' => $prixUnitaire,
+                'montant_total' => $montant,
+                'date_vente' => now(),
+            ]);
+        }
+
+        DB::commit();
+
+        // Envoi du message WhatsApp si le client a un téléphone
+        if ($client->telephone) {
+            $token = env('WHATSAPP_TOKEN');
+            $phoneId = '709400618925318';
+
+            // Format du numéro
+            $clientPhone = preg_replace('/[^0-9]/', '', $client->telephone);
+            if (!Str::startsWith($clientPhone, '221')) {
+                $clientPhone = '221' . $clientPhone;
+            }
+
+            $messageData = [
+                'messaging_product' => 'whatsapp',
+                'to' => $clientPhone,
+                'type' => 'interactive',
+                'interactive' => [
+                    'type' => 'button',
+                    'body' => [
+                        'text' => "Bonjour {$client->prenom}, merci pour votre achat chez nous. Êtes-vous satisfait de la vente ?",
+                    ],
+                    'action' => [
+                        'buttons' => [
+                            [
+                                'type' => 'reply',
+                                'reply' => [
+                                    'id' => 'satisfait_' . $vente->id,
+                                    'title' => 'Satisfait',
+                                ],
+                            ],
+                            [
+                                'type' => 'reply',
+                                'reply' => [
+                                    'id' => 'non_satisfait_' . $vente->id,
+                                    'title' => 'Non satisfait',
+                                ],
+                            ],
+                        ],
+                    ],
+                ],
+            ];
+
+            try {
+                $response = Http::withToken($token)->post(
+                    "https://graph.facebook.com/v19.0/{$phoneId}/messages",
+                    $messageData
+                );
+
+                if ($response->successful()) {
+                    Log::info('✅ Message WhatsApp envoyé avec succès', ['response' => $response->json()]);
+                } else {
+                    Log::error('❌ Échec de l’envoi WhatsApp', [
+                        'status' => $response->status(),
+                        'body' => $response->body(),
+                        'error' => $response->json(),
+                    ]);
                 }
-                $produit->stock -= $quantite;
-                $produit->save();
-    
-                $vente->produits()->attach($produit->id, [
-                    'quantite' => $quantite,
-                    'prix_unitaire' => $prixUnitaire,
-                    'montant_total' => $montant,
-                    'date_vente' => now(),
+            } catch (\Exception $e) {
+                Log::error('❌ Exception lors de l’envoi WhatsApp', [
+                    'error' => $e->getMessage(),
                 ]);
             }
-    
-            DB::commit();
-    
-            return response()->json([
-                'message' => 'Vente enregistrée avec succès.',
-                'vente' => $vente->load('client', 'produits'),
-            ], 201);
-    
-        } catch (\Exception $e) {
-            DB::rollBack();
-            return response()->json([
-                'message' => 'Erreur lors de l’enregist rement de la vente.',
-                'error' => $e->getMessage(),
-            ], 500);
         }
+
+        return response()->json([
+            'message' => 'Vente enregistrée avec succès.',
+            'vente' => $vente->load('client', 'produits'),
+        ], 201);
+
+    } catch (\Exception $e) {
+        DB::rollBack();
+        Log::error('❌ Erreur dans la méthode store', ['exception' => $e]);
+        return response()->json([
+            'message' => 'Erreur lors de l’enregistrement de la vente.',
+            'error' => $e->getMessage(),
+        ], 500);
     }
+}
     
     
 
@@ -405,5 +470,32 @@ public function revenusDuMois()
         ], 500);
     }
 }
+      // Statistiques globales
+      public function stats()
+      {
+          return response()->json([
+              'nombre_utilisateurs' => User::count(),
+              'nombre_ventes' => Vente::count(),
+              'nombre_produits' => Produit::count(),
+              'nombre_vendeuses' =>User::count(),
+              'nombre_client' => Client::count(),
+          ]);
+      }
+      public function ventesParMois()
+      {
+          $ventes = Vente::selectRaw('MONTH(created_at) as mois_num, COUNT(*) as total')
+              ->groupBy('mois_num')
+              ->get()
+              ->map(function ($item) {
+                  $moisNom = Carbon::createFromDate(null, $item->mois_num)->locale('fr')->monthName;
+                  return [
+                      'mois' => ucfirst($moisNom),
+                      'total' => $item->total,
+                  ];
+              });
+      
+          return response()->json($ventes);
+      }
+      
 
 }
