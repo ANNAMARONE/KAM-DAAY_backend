@@ -5,7 +5,9 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\UpdateClientRequest;
 use App\Models\Client;
+use App\Models\Feedback;
 use App\Models\Produit;
+use App\Models\Vente;
 use Illuminate\Support\Facades\DB;
 
 use Illuminate\Http\Request;
@@ -504,4 +506,41 @@ public function clientsRecents()
 
     return response()->json($clients);
 }
+public function recentActions()
+{
+    $ventes = Vente::latest()->take(5)->get()->map(function($v) {
+        return [
+            'type' => 'vente',
+            'description' => "Nouvelle vente - " . $v->client->nom,
+            'created_at' => $v->created_at,
+        ];
+    });
+
+    $clients = Client::latest()->take(5)->get()->map(function($c) {
+        return [
+            'type' => 'client',
+            'description' => "Nouveau client - " . $c->nom,
+            'created_at' => $c->created_at,
+        ];
+    });
+
+    $feedbacks = Feedback::latest()->take(5)->get()->map(function($f) {
+        return [
+            'type' => 'feedback',
+            'description' => "Nouveau feedback - " . $f->message,
+            'created_at' => $f->created_at,
+        ];
+    });
+
+    // Fusionner toutes les actions et trier par date
+    $activites = $ventes
+        ->merge($clients)
+        ->merge($feedbacks)
+        ->sortByDesc('created_at')
+        ->take(5) // on ne garde que les 5 plus récentes
+        ->values();
+
+    return response()->json($activites);
+}
+
 }

@@ -1,0 +1,7 @@
+POST http://127.0.0.1:8000/api/password/forgot
+Content-Type: application/json
+Accept: application/json
+
+{
+  "telephone": "221784615847"
+}

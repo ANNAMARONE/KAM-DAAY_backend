@@ -5,8 +5,10 @@ use App\Http\Controllers\AIController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\ClientController;
 use App\Http\Controllers\FeedbackController;
+use App\Http\Controllers\ForgotPasswordController;
 use App\Http\Controllers\GestionUtilisateur;
 use App\Http\Controllers\NotificationController;
+use App\Http\Controllers\PasswordResetController;
 use App\Http\Controllers\ProduitController;
 use App\Http\Controllers\StatistiqueController;
 use App\Http\Controllers\VenteController;
@@ -14,6 +16,14 @@ use App\Http\Controllers\WebhookController;
 use App\Models\Notification;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Auth;
+Route::get('/test-env', function () {
+    return response()->json([
+        'TWILIO_SID' => env('TWILIO_SID'),
+        'TWILIO_AUTH_TOKEN' => env('TWILIO_AUTH_TOKEN'),
+        'TWILIO_WHATSAPP_FROM' => env('TWILIO_WHATSAPP_FROM'),
+    ]);
+});
+
 Route::post('/ai/ask', [AIController::class, 'ask']);
 Route::post('/register', [AuthController::class, 'register'])->name('register');
 Route::post('/login', [AuthController::class, 'login']);
@@ -22,6 +32,9 @@ Route::post('/reset-password', action: [AuthController::class, 'resetPassword'])
 Route::middleware('auth:api')->get('/notifications', function () {
     return auth::user()->notifications()->latest()->take(10)->get();
 });
+Route::post('/password/forgot', [AuthController::class, 'sendResetLink']);
+Route::post('/password/reset', [AuthController::class, 'reset']);
+
 Route::middleware('jwt')->group(function () {
     Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
     Route::get('/user', [AuthController::class, 'user'])->name('user');
@@ -30,7 +43,7 @@ Route::middleware('jwt')->group(function () {
 
     Route::post('/webhook/whatsapp', [WebhookController::class, 'handle']);
     Route::get('/webhook/whatsapp', [WebhookController::class, 'verify']);
-
+   
 
     //route pour la gestion clients
     Route::get('/clients', [ClientController::class, 'index'])->name('clients.index');
@@ -96,14 +109,15 @@ Route::middleware('jwt')->group(function () {
     Route::get('/admin/produits',[ProduitController::class,'afficherProduit']);
     Route::get('/stats', [VenteController::class, 'stats']);
     Route::get('/ventes-par-mois', [VenteController::class, 'ventesParMois']);
-});
-Route::get('/ventes', [VenteController::class, 'index'])->name('ventes.index');
-Route::get('/ventes_par_client/{id}', [VenteController::class, 'ventesParClient'])->name('ventes.ventesParClient');
-Route::get('/ventes_par_date/{date}', [VenteController::class, 'filterVenteByDate'])->name('ventes.filterVenteByDate');
-Route::post('/noter_vente/{id}/{satisfaite}', [VenteController::class, 'noterVente'])->name('ventes.noterVente');
-Route::get('/ventesNonSatisfaites', [VenteController::class, 'ventesNonSatisfaites'])->name('ventes.ventesNonSatisfaites');
-Route::delete('/ventes/{id}', [VenteController::class, 'destroy'])->name('ventes.destroy');
-Route::get('/detail_vente/{id}', [VenteController::class, 'show'])->name('ventes.show');
-Route::get('/reponse_client/{id}/{satisfaite}', [VenteController::class, 'noterParLien']);
-Route::post('/ventes/{id}/noter/{satisfaite}', [VenteController::class, 'noterVente']);
-Route::get('/alertes/clients_insatisfaits', [ClientController::class, 'clientsInsatisfaitsRecurrents']);
+    Route::get('/ventes', [VenteController::class, 'index'])->name('ventes.index');
+    Route::get('/ventes_par_client/{id}', [VenteController::class, 'ventesParClient'])->name('ventes.ventesParClient');
+    Route::get('/ventes_par_date/{date}', [VenteController::class, 'filterVenteByDate'])->name('ventes.filterVenteByDate');
+    Route::post('/noter_vente/{id}/{satisfaite}', [VenteController::class, 'noterVente'])->name('ventes.noterVente');
+    Route::get('/ventesNonSatisfaites', [VenteController::class, 'ventesNonSatisfaites'])->name('ventes.ventesNonSatisfaites');
+    Route::delete('/ventes/{id}', [VenteController::class, 'destroy'])->name('ventes.destroy');
+    Route::get('/detail_vente/{id}', [VenteController::class, 'show'])->name('ventes.show');
+    Route::get('/reponse_client/{id}/{satisfaite}', [VenteController::class, 'noterParLien']);
+    Route::post('/ventes/{id}/noter/{satisfaite}', [VenteController::class, 'noterVente']);
+    Route::get('/alertes/clients_insatisfaits', [ClientController::class, 'clientsInsatisfaitsRecurrents']);
+    Route::get('/recent-actions', [ClientController::class, 'recentActions']);
+    });
